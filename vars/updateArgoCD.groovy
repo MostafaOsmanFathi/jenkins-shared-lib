@@ -10,7 +10,7 @@ def call(Map config = [:]) {
     def image = config.image ?: env.DOCKER_IMAGE ?: 'mostafaosmanfathi/ivolve-nodejs-app'
     def tag = config.tag ?: env.BUILD_NUMBER ?: 'latest'
     def fullImage = "${image}:${tag}"
-    def gitOpsRepoUrl = config.gitOpsRepoUrl ?: 'git@github.com:MostafaOsmanFathi/IVolveArgoCD.git'
+    def gitOpsRepoUrl = config.gitOpsRepoUrl ?: 'https://github.com/MostafaOsmanFathi/IVolveArgoCD.git'
     def gitOpsBranch = config.gitOpsBranch ?: 'main'
     def manifestPath = config.manifestPath ?: 'ArgoCD/deployment.yaml'
     def gitCredentialsId = config.gitCredentialsId ?: 'Github'
@@ -19,25 +19,35 @@ def call(Map config = [:]) {
     echo "======== Update GitOps manifest for ArgoCD ========"
     sh "rm -rf ${workDir}"
 
-    withCredentials([sshUserPrivateKey(credentialsId: gitCredentialsId, keyFileVariable: 'SSH_KEY')]) {
-        withEnv(['GIT_SSH_COMMAND=ssh -i $SSH_KEY -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null']) {
-            sh "git clone ${gitOpsRepoUrl} ${workDir}"
-        }
+    def repoPath = gitOpsRepoUrl.replace('https://', '')
+
+    withCredentials([
+        usernamePassword(
+            credentialsId: gitCredentialsId,
+            usernameVariable: 'GIT_USERNAME',
+            passwordVariable: 'GIT_PASSWORD'
+        )
+    ]) {
+        sh "git clone https://\${GIT_USERNAME}:\${GIT_PASSWORD}@${repoPath} ${workDir}"
     }
 
     sh "sed -i 's|${image}:.*|${fullImage}|' ${workDir}/${manifestPath}"
 
-    withCredentials([sshUserPrivateKey(credentialsId: gitCredentialsId, keyFileVariable: 'SSH_KEY')]) {
-        withEnv(['GIT_SSH_COMMAND=ssh -i $SSH_KEY -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null']) {
-            sh """
-            cd ${workDir}
-            git config user.email "jenkins@ivolve.local"
-            git config user.name "Jenkins"
-            git add ${manifestPath}
-            git commit -m "chore: update image to ${fullImage}" || echo "No changes to commit"
-            git push origin ${gitOpsBranch}
-            """
-        }
+    withCredentials([
+        usernamePassword(
+            credentialsId: gitCredentialsId,
+            usernameVariable: 'GIT_USERNAME',
+            passwordVariable: 'GIT_PASSWORD'
+        )
+    ]) {
+        sh """
+        cd ${workDir}
+        git config user.email "jenkins@ivolve.local"
+        git config user.name "Jenkins"
+        git add ${manifestPath}
+        git commit -m "chore: update image to ${fullImage}" || echo "No changes to commit"
+        git push https://\${GIT_USERNAME}:\${GIT_PASSWORD}@${repoPath} ${gitOpsBranch}
+        """
     }
 
     sh "rm -rf ${workDir}"
