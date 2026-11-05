@@ -19,16 +19,16 @@ def call(Map config = [:]) {
     echo "======== Update GitOps manifest for ArgoCD ========"
     sh "rm -rf ${workDir}"
 
-    sshagent(credentials: [gitCredentialsId]) {
-        withEnv(['GIT_SSH_COMMAND=ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null']) {
+    withCredentials([sshUserPrivateKey(credentialsId: gitCredentialsId, keyFileVariable: 'SSH_KEY')]) {
+        withEnv(['GIT_SSH_COMMAND=ssh -i $SSH_KEY -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null']) {
             sh "git clone ${gitOpsRepoUrl} ${workDir}"
         }
     }
 
     sh "sed -i 's|${image}:.*|${fullImage}|' ${workDir}/${manifestPath}"
 
-    sshagent(credentials: [gitCredentialsId]) {
-        withEnv(['GIT_SSH_COMMAND=ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null']) {
+    withCredentials([sshUserPrivateKey(credentialsId: gitCredentialsId, keyFileVariable: 'SSH_KEY')]) {
+        withEnv(['GIT_SSH_COMMAND=ssh -i $SSH_KEY -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null']) {
             sh """
             cd ${workDir}
             git config user.email "jenkins@ivolve.local"
